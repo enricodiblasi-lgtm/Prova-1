@@ -1,0 +1,508 @@
+<style>
+  .aq { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+  .aq-head { display: grid; gap: var(--cds-gap-xs); }
+  .aq-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .aq-take { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 70ch; }
+  .aq-tabs { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); }
+  .aq-tab { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; padding: var(--cds-pad-sm) var(--cds-pad-md); font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg-muted); cursor: pointer; }
+  .aq-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+  .aq-tab:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+  .aq-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--cds-gap-md); }
+  .aq-tile, .aq-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); align-content: start; min-width: 0; }
+  .aq-tile-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .aq-tile-value { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; min-height: 1.3em; }
+  .aq-tile-delta { font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; color: var(--color-fg-muted); min-height: 1.3em; }
+  .aq-tile-delta.good { color: var(--color-ok); }
+  .aq-tile-delta.bad { color: var(--color-bad); }
+  .aq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+  .aq-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .aq-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .aq-chart { position: relative; min-height: 12rem; }
+  .aq-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .aq-tip-k { color: var(--cds-text-secondary); }
+  .aq-sys { display: grid; gap: var(--cds-gap-md); margin: 0; padding: 0; list-style: none; }
+  .aq-sys li { display: grid; gap: var(--cds-gap-xs); padding-left: var(--cds-pad-md); border-left: 3px solid var(--color-warn); }
+  .aq-sys b { font-weight: var(--cds-font-weight-medium); }
+  .aq-page { display: grid; gap: var(--cds-gap-lg); }
+  .aq-page[hidden] { display: none; }
+  .aq-tools { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: center; }
+  .aq-tools input, .aq-tools select { font: inherit; font-size: var(--cds-font-size-body); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); min-width: 0; }
+  .aq-tools input { flex: 1 1 14rem; }
+  .aq-count { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+  .aq-scroll { max-height: 34rem; overflow: auto; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+  .aq-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .aq-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; z-index: 1; }
+  .aq-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .aq-table tr.aq-alt td { background: color-mix(in srgb, var(--color-panel) 60%, var(--color-bg)); }
+  .aq-table tr.aq-first td { border-top: 2px solid var(--color-border-line); }
+  .aq-pill { display: inline-block; padding: 0 var(--cds-pad-xs); border-radius: 999px; border: 1px solid currentColor; font-size: var(--cds-font-size-caption); line-height: 1.5; white-space: nowrap; }
+  .aq-pill.Alta { color: var(--color-bad); }
+  .aq-pill.Media { color: var(--color-warn); }
+  .aq-pill.Bassa { color: var(--color-fg-muted); }
+  .aq-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+  .aq-steps { margin: 0; padding-left: 1.2rem; display: grid; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-body); max-width: 75ch; }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  .aq-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); min-height: inherit; }
+  .aq-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+  @media (max-width: 40rem) { .aq-hide-narrow { display: none; } }
+</style>
+
+<div class="aq">
+  <header class="aq-head" id="riepilogo-testa">
+    <h1 class="aq-title">Qualità anagrafica Snoots</h1>
+    <p class="aq-take" id="aq-take">
+      Controllo del <span data-source="ultimo" data-field="data" data-row="0" class="dash-skeleton">—</span>:
+      <span data-source="ultimo" data-field="clienti" data-row="0" class="dash-skeleton">—</span> clienti e
+      <span data-source="ultimo" data-field="animali" data-row="0" class="dash-skeleton">—</span> animali.
+      Le schede doppie da unire sono <span data-source="ultimo" data-field="schedeInPiu" data-row="0" class="dash-skeleton">—</span>:
+      si parte da quelle a confidenza alta.
+    </p>
+  </header>
+
+  <nav class="aq-tabs" role="tablist" aria-label="Sezioni">
+    <button class="aq-tab" role="tab" id="tab-riepilogo" data-tab="riepilogo" aria-selected="true">Riepilogo</button>
+    <button class="aq-tab" role="tab" id="tab-doppioni" data-tab="doppioni" aria-selected="false">Doppioni</button>
+    <button class="aq-tab" role="tab" id="tab-clienti" data-tab="clienti" aria-selected="false">Clienti da sistemare</button>
+    <button class="aq-tab" role="tab" id="tab-animali" data-tab="animali" aria-selected="false">Animali da sistemare</button>
+  </nav>
+
+  <!-- RIEPILOGO -->
+  <section class="aq-page" id="riepilogo" data-page="riepilogo">
+    <div class="aq-tiles" data-fetchpriority="high">
+      <div class="aq-tile" id="kpi-completi">
+        <span class="aq-tile-label">Clienti con scheda completa e corretta</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="quotaCompleti" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="quotaCompleti" data-good="up"></span>
+      </div>
+      <div class="aq-tile" id="kpi-doppioni">
+        <span class="aq-tile-label">Gruppi di clienti doppioni</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="gruppiDoppioniClienti" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="gruppiDoppioniClienti" data-good="down"></span>
+      </div>
+      <div class="aq-tile" id="kpi-schede">
+        <span class="aq-tile-label">Schede cliente in più da unire</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="schedeInPiu" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="schedeInPiu" data-good="down"></span>
+      </div>
+      <div class="aq-tile" id="kpi-animali-doppi">
+        <span class="aq-tile-label">Gruppi di animali doppioni</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="gruppiDoppioniAnimali" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="gruppiDoppioniAnimali" data-good="down"></span>
+      </div>
+      <div class="aq-tile" id="kpi-chip">
+        <span class="aq-tile-label">Cani senza microchip</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="caniSenzaChip" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="caniSenzaChip" data-good="down"></span>
+      </div>
+      <div class="aq-tile" id="kpi-senza-animali">
+        <span class="aq-tile-label">Clienti senza animali</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="clientiSenzaAnimali" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="clientiSenzaAnimali" data-good="down"></span>
+      </div>
+    </div>
+
+    <div class="aq-card" id="card-sistemici">
+      <h2>Problemi nati dall'importazione</h2>
+      <p class="aq-note">Errori che riguardano centinaia di schede alla volta: conviene correggerli in blocco con il supporto Snoots, non scheda per scheda.</p>
+      <ul class="aq-sys" id="aq-sys" data-source="sistemici"></ul>
+    </div>
+
+    <div class="aq-grid">
+      <div class="aq-card" id="card-campi-clienti">
+        <h2>Dati mancanti o errati: clienti</h2>
+        <p class="aq-note">Numero di schede cliente per campo.</p>
+        <div class="aq-chart" id="chart-campi-clienti" data-source="per_campo"></div>
+      </div>
+      <div class="aq-card" id="card-campi-animali">
+        <h2>Dati mancanti o errati: animali</h2>
+        <p class="aq-note">Numero di schede animale per campo.</p>
+        <div class="aq-chart" id="chart-campi-animali" data-source="per_campo"></div>
+      </div>
+    </div>
+
+    <div class="aq-card" id="card-andamento">
+      <h2>Andamento mese per mese</h2>
+      <p class="aq-note" id="aq-trend-note">Quota di clienti con scheda completa e gruppi di doppioni a ogni controllo.</p>
+      <div class="aq-chart" id="chart-andamento" data-source="storico"></div>
+    </div>
+
+    <div class="aq-card" id="card-come">
+      <h2>Come leggere i controlli</h2>
+      <ol class="aq-steps">
+        <li><b>Confidenza alta</b>: stesso codice fiscale o partita IVA, CF che differisce per un errore di battitura, oppure stesso nome con stesso telefono, email o indirizzo. Quasi certamente la stessa persona.</li>
+        <li><b>Confidenza media</b>: stesso nome e cognome, nome quasi identico o nome e cognome invertiti, senza dati che li distinguano. Da verificare prima di unire.</li>
+        <li>Due schede con codici fiscali validi e diversi non vengono mai considerate doppioni: sono omonimi o familiari.</li>
+        <li>Il codice fiscale viene ricalcolato da nome e cognome e controllato col carattere di controllo; il sesso viene confrontato con quello ricavato dal CF.</li>
+        <li>Telefoni, email, CAP, partite IVA e microchip (15 cifre) vengono controllati nel formato. Il microchip è segnalato come mancante solo per i cani vivi, per cui è obbligatorio.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- DOPPIONI -->
+  <section class="aq-page" id="doppioni" data-page="doppioni" hidden>
+    <div class="aq-card" id="card-doppioni-clienti">
+      <h2>Clienti doppioni</h2>
+      <p class="aq-note">Ogni gruppo è una persona registrata più volte. Tieni la scheda più completa e sposta lì animali e fatture delle altre.</p>
+      <div class="aq-tools">
+        <input id="dc-q" type="search" placeholder="Cerca nome, codice o città" aria-label="Cerca tra i clienti doppioni">
+        <select id="dc-liv" aria-label="Confidenza"><option value="">Tutte le confidenze</option><option>Alta</option><option>Media</option></select>
+        <span class="aq-count" id="dc-n"></span>
+      </div>
+      <div class="aq-scroll">
+        <table class="aq-table" id="dc-table" data-source="doppioni_clienti" data-row-key="codice">
+          <thead><tr>
+            <th data-field="gruppo">Gruppo</th><th data-field="livello">Confidenza</th><th data-field="codice">Codice</th>
+            <th data-field="nome">Cliente</th><th data-field="citta" class="aq-hide-narrow">Città</th>
+            <th data-field="animali">Animali</th><th data-field="motivi">Perché</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="aq-card" id="card-doppioni-animali">
+      <h2>Animali doppioni</h2>
+      <p class="aq-note">Stesso microchip, oppure stesso nome sotto lo stesso proprietario (o sotto suoi doppioni). Un microchip condiviso da due animali diversi è un errore di battitura da correggere.</p>
+      <div class="aq-tools">
+        <input id="da-q" type="search" placeholder="Cerca animale, proprietario o codice" aria-label="Cerca tra gli animali doppioni">
+        <select id="da-liv" aria-label="Confidenza"><option value="">Tutte le confidenze</option><option>Alta</option><option>Media</option></select>
+        <span class="aq-count" id="da-n"></span>
+      </div>
+      <div class="aq-scroll">
+        <table class="aq-table" id="da-table" data-source="doppioni_animali" data-row-key="gruppo,codice">
+          <thead><tr>
+            <th data-field="gruppo">Gruppo</th><th data-field="livello">Confidenza</th><th data-field="codice">Codice</th>
+            <th data-field="nome">Animale</th><th data-field="specie" class="aq-hide-narrow">Specie</th>
+            <th data-field="nascita" class="aq-hide-narrow">Nascita</th><th data-field="proprietario">Proprietario</th>
+            <th data-field="motivi">Perché</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLIENTI -->
+  <section class="aq-page" id="clienti" data-page="clienti" hidden>
+    <div class="aq-card" id="card-problemi-clienti">
+      <h2>Clienti da sistemare</h2>
+      <p class="aq-note">Una riga per ogni dato mancante o errato. Codici fiscali, telefoni ed email sono nascosti qui: li trovi nel file Excel del controllo.</p>
+      <div class="aq-tools">
+        <input id="pc-q" type="search" placeholder="Cerca nome o codice cliente" aria-label="Cerca tra i clienti da sistemare">
+        <select id="pc-g" aria-label="Gravità"><option value="">Tutte le gravità</option><option>Alta</option><option>Media</option><option>Bassa</option></select>
+        <select id="pc-c" aria-label="Campo" data-source="problemi_clienti"><option value="">Tutti i campi</option></select>
+        <span class="aq-count" id="pc-n"></span>
+      </div>
+      <div class="aq-scroll">
+        <table class="aq-table" id="pc-table" data-source="problemi_clienti" data-row-key="id">
+          <thead><tr>
+            <th data-field="codice">Codice</th><th data-field="nome">Cliente</th><th data-field="gravita">Gravità</th>
+            <th data-field="campo">Campo</th><th data-field="tipo" class="aq-hide-narrow">Tipo</th><th data-field="dettaglio">Dettaglio</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANIMALI -->
+  <section class="aq-page" id="animali" data-page="animali" hidden>
+    <div class="aq-card" id="card-problemi-animali">
+      <h2>Animali da sistemare</h2>
+      <p class="aq-note">Una riga per ogni dato mancante o errato sulla scheda dell'animale.</p>
+      <div class="aq-tools">
+        <input id="pa-q" type="search" placeholder="Cerca animale, proprietario o codice" aria-label="Cerca tra gli animali da sistemare">
+        <select id="pa-g" aria-label="Gravità"><option value="">Tutte le gravità</option><option>Alta</option><option>Media</option><option>Bassa</option></select>
+        <select id="pa-c" aria-label="Campo" data-source="problemi_animali"><option value="">Tutti i campi</option></select>
+        <span class="aq-count" id="pa-n"></span>
+      </div>
+      <div class="aq-scroll">
+        <table class="aq-table" id="pa-table" data-source="problemi_animali" data-row-key="id">
+          <thead><tr>
+            <th data-field="codice">Codice</th><th data-field="nome">Animale</th><th data-field="specie" class="aq-hide-narrow">Specie</th>
+            <th data-field="proprietario" class="aq-hide-narrow">Proprietario</th><th data-field="gravita">Gravità</th>
+            <th data-field="campo">Campo</th><th data-field="dettaglio">Dettaglio</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  dash.calc('ultimo', {
+    inputs: ['storico'],
+    title: 'Ultimo controllo e variazione',
+    description: "Valori dell'ultimo controllo, quota di clienti completi e differenza rispetto al controllo precedente.",
+    fn: (storico) => {
+      const s = [...storico].sort((a, b) => (a.data < b.data ? -1 : 1));
+      const u = s[s.length - 1];
+      const p = s.length > 1 ? s[s.length - 2] : null;
+      const q = (r) => r.clientiCompleti / r.clienti;
+      const keys = ['clienti', 'animali', 'clientiCompleti', 'gruppiDoppioniClienti', 'gruppiDoppioniAlta', 'schedeInPiu',
+        'gruppiDoppioniAnimali', 'clientiSenzaAnimali', 'animaliConProblemi', 'caniSenzaChip'];
+      const row = { data: u.data, quotaCompleti: q(u), d_quotaCompleti: p ? q(u) - q(p) : null };
+      for (const k of keys) {
+        row[k] = u[k];
+        row['d_' + k] = p ? u[k] - p[k] : null;
+      }
+      return [row];
+    },
+  });
+</script>
+
+<script>
+  const it = d3.formatLocale({ decimal: ',', thousands: '.', grouping: [3], currency: ['€', ''] });
+  const fInt = it.format(',');
+  const fPct = it.format('.1%');
+  const fData = (s) => s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
+  window.aqFmt = { it, fInt, fPct, fData };
+
+  // --- schede
+  const tabs = [...document.querySelectorAll('.aq-tab')];
+  const pages = [...document.querySelectorAll('.aq-page')];
+  const show = (name) => {
+    if (!pages.some((p) => p.dataset.page === name)) name = 'riepilogo';
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    pages.forEach((p) => { p.hidden = p.dataset.page !== name; });
+    window.aqTab = name;
+    window.dispatchEvent(new Event('aq-tab'));
+  };
+  tabs.forEach((t) => t.addEventListener('click', () => { show(t.dataset.tab); dash.setLink(t.dataset.tab); }));
+  show(location.hash.slice(1) || 'riepilogo');
+
+  // --- cifre in alto
+  dash.onData(() => {
+    const u = dash.data('ultimo');
+    const marks = document.querySelectorAll('[data-source="ultimo"]');
+    if (u.status !== 'ok' || !u.data.length) {
+      marks.forEach((m) => { m.textContent = '—'; });
+      return;
+    }
+    const r = u.data[0];
+    marks.forEach((m) => {
+      m.classList.remove('dash-skeleton');
+      const f = m.dataset.field;
+      const v = r[f];
+      m.textContent = f === 'data' ? fData(v) : f === 'quotaCompleti' ? fPct(v) : fInt(v);
+    });
+    document.querySelectorAll('.aq-tile-delta').forEach((el) => {
+      const k = el.dataset.k;
+      const d = r['d_' + k];
+      el.classList.remove('good', 'bad');
+      if (d === null || d === undefined) {
+        el.textContent = 'Primo controllo: il confronto arriva dal prossimo mese';
+        return;
+      }
+      const txt = k === 'quotaCompleti' ? (d >= 0 ? '+' : '') + it.format('.1f')(d * 100) + ' punti' : (d > 0 ? '+' : '') + fInt(d);
+      el.textContent = txt + ' rispetto al controllo precedente';
+      if (d !== 0) el.classList.add((d > 0) === (el.dataset.good === 'up') ? 'good' : 'bad');
+    });
+  });
+
+  // --- problemi sistematici
+  dash.onData(() => {
+    const ul = document.getElementById('aq-sys');
+    const s = dash.data('sistemici');
+    if (s.status === 'error') { ul.replaceChildren(Object.assign(document.createElement('li'), { className: 'aq-fail', textContent: 'Failed to load' })); return; }
+    if (s.status !== 'ok') { ul.replaceChildren(); return; }
+    ul.replaceChildren(...s.data.map((r) => {
+      const li = document.createElement('li');
+      const b = document.createElement('b');
+      b.textContent = r.titolo;
+      const p = document.createElement('span');
+      p.className = 'aq-note';
+      p.textContent = r.dettaglio;
+      li.append(b, p);
+      return li;
+    }));
+  });
+</script>
+
+<script>
+  // --- barre per campo
+  const drawBars = (el, rows) => {
+    const { fInt } = window.aqFmt;
+    el.replaceChildren();
+    const w = el.clientWidth;
+    if (!w || !rows.length) return;
+    const tip = document.createElement('div');
+    tip.className = 'aq-tip';
+    tip.hidden = true;
+    const color = { 'Dato mancante': dash.colors[0], 'Dato errato': 'var(--cds-chart-status-critical)', 'Dato generico': dash.colors[2], 'Senza animali': 'var(--cds-chart-muted)', Proprietario: 'var(--cds-chart-status-critical)' };
+    const label = (r) => r.campo + (r.tipo === 'Dato errato' ? ' (errato)' : r.tipo === 'Dato generico' ? ' (generico)' : '');
+    const bh = 18, gap = 8;
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const probe = svg.append('text').attr('font-size', 12).style('font-family', 'var(--font-anthropic-sans)');
+    const lw = d3.max(rows, (r) => { probe.text(label(r)); return probe.node().getComputedTextLength(); }) + 10;
+    probe.text(fInt(d3.max(rows, (r) => r.n)));
+    const nw = probe.node().getComputedTextLength() + 8;
+    probe.remove();
+    const h = rows.length * (bh + gap);
+    svg.attr('viewBox', `0 0 ${w} ${h}`).attr('height', h);
+    const x = d3.scaleLinear([0, d3.max(rows, (r) => r.n)], [0, Math.max(10, w - lw - nw)]);
+    const g = svg.selectAll('g').data(rows).join('g').attr('transform', (r, i) => `translate(0,${i * (bh + gap)})`);
+    g.append('text').attr('x', lw - 10).attr('y', bh / 2).attr('dy', '0.35em').attr('text-anchor', 'end')
+      .attr('font-size', 12).style('fill', 'var(--color-fg)').style('font-family', 'var(--font-anthropic-sans)').text(label);
+    g.append('rect').attr('x', lw).attr('height', bh).attr('rx', 4).attr('width', (r) => Math.max(2, x(r.n)))
+      .style('fill', (r) => color[r.tipo] || dash.colors[1]);
+    g.append('text').attr('x', (r) => lw + Math.max(2, x(r.n)) + 4).attr('y', bh / 2).attr('dy', '0.35em')
+      .attr('font-size', 12).style('fill', 'var(--color-fg-muted)').style('font-variant-numeric', 'tabular-nums').text((r) => fInt(r.n));
+    g.on('mousemove', (event, r) => {
+      tip.hidden = false;
+      tip.replaceChildren();
+      const k = document.createElement('div'); k.className = 'aq-tip-k'; k.textContent = r.tipo;
+      const v = document.createElement('div'); v.textContent = `${r.campo}: ${fInt(r.n)} schede`;
+      tip.append(k, v);
+      const [mx, my] = d3.pointer(event, el);
+      tip.style.left = Math.min(mx + 12, w - tip.offsetWidth - 4) + 'px';
+      tip.style.top = (my + 12) + 'px';
+    }).on('mouseleave', () => { tip.hidden = true; });
+    el.append(tip);
+  };
+
+  dash.onData(() => {
+    if (window.aqTab !== 'riepilogo') return;
+    const d = dash.data('per_campo');
+    for (const [id, ent] of [['chart-campi-clienti', 'Cliente'], ['chart-campi-animali', 'Animale']]) {
+      const el = document.getElementById(id);
+      if (d.status === 'error') { el.innerHTML = '<div class="aq-fail">Failed to load</div>'; continue; }
+      if (d.status !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); continue; }
+      el.classList.remove('dash-skeleton');
+      const rows = d.data.filter((r) => r.ent === ent).map((r) => ({ campo: r.campo, tipo: r.cat, n: Number(r.n) }))
+        .sort((a, b) => b.n - a.n);
+      drawBars(el, rows);
+    }
+  });
+  window.addEventListener('aq-tab', () => {
+    if (window.aqTab !== 'riepilogo') return;
+    const d = dash.data('per_campo');
+    if (d.status !== 'ok') return;
+    for (const [id, ent] of [['chart-campi-clienti', 'Cliente'], ['chart-campi-animali', 'Animale']]) {
+      drawBars(document.getElementById(id), d.data.filter((r) => r.ent === ent).map((r) => ({ campo: r.campo, tipo: r.cat, n: Number(r.n) })).sort((a, b) => b.n - a.n));
+    }
+  });
+</script>
+
+<script>
+  // --- andamento
+  const drawTrend = () => {
+    const { it, fPct, fInt, fData } = window.aqFmt;
+    const el = document.getElementById('chart-andamento');
+    const d = dash.data('storico');
+    if (d.status === 'error') { el.innerHTML = '<div class="aq-fail">Failed to load</div>'; return; }
+    if (d.status !== 'ok') { el.replaceChildren(); el.classList.add('dash-skeleton'); return; }
+    el.classList.remove('dash-skeleton');
+    el.replaceChildren();
+    const w = el.clientWidth;
+    if (!w) return;
+    const rows = d.data.map((r) => ({ t: new Date(r.data + 'T00:00:00Z'), data: r.data, q: r.clientiCompleti / r.clienti, g: Number(r.gruppiDoppioniClienti) }))
+      .sort((a, b) => a.t - b.t);
+    document.getElementById('aq-trend-note').textContent = rows.length < 2
+      ? 'Quota di clienti con scheda completa a ogni controllo. Per ora c’è un solo controllo: la linea si forma dal prossimo mese.'
+      : 'Quota di clienti con scheda completa a ogni controllo.';
+    const h = 190, m = { t: 12, r: 70, b: 28, l: 46 };
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${w} ${h}`).attr('height', h);
+    const ext = d3.extent(rows, (r) => r.t);
+    const pad = 15 * 864e5;
+    const x = d3.scaleUtc([new Date(+ext[0] - pad), new Date(+ext[1] + pad)], [m.l, w - m.r]);
+    const y = d3.scaleLinear([0, 1], [h - m.b, m.t]);
+    svg.append('g').selectAll('line').data(y.ticks(4)).join('line').attr('x1', m.l).attr('x2', w - m.r)
+      .attr('y1', y).attr('y2', y).style('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(it.format('.0%')).tickSize(0))
+      .attr('font-size', null).attr('font-family', null).call((g) => g.select('.domain').remove())
+      .selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 11);
+    svg.append('g').attr('transform', `translate(0,${h - m.b})`)
+      .call(d3.axisBottom(x).tickValues(rows.map((r) => r.t)).tickFormat((t) => fData(t.toISOString().slice(0, 10))).tickSize(0))
+      .attr('font-size', null).attr('font-family', null).call((g) => g.select('.domain').style('stroke', 'var(--cds-chart-axis)'))
+      .selectAll('text').style('fill', 'var(--color-fg-muted)').attr('font-size', 11).attr('dy', '1.2em');
+    if (rows.length > 1) {
+      svg.append('path').datum(rows).attr('fill', 'none').style('stroke', dash.colors[0]).attr('stroke-width', 2)
+        .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round').attr('d', d3.line((r) => x(r.t), (r) => y(r.q)));
+    }
+    svg.selectAll('circle').data(rows).join('circle').attr('cx', (r) => x(r.t)).attr('cy', (r) => y(r.q)).attr('r', 4).style('fill', dash.colors[0]);
+    const last = rows[rows.length - 1];
+    svg.append('text').attr('x', x(last.t) + 8).attr('y', y(last.q)).attr('dy', '0.35em').attr('font-size', 12)
+      .style('fill', 'var(--color-fg)').style('font-variant-numeric', 'tabular-nums').text(fPct(last.q));
+  };
+  dash.onData(() => { if (window.aqTab === 'riepilogo') drawTrend(); });
+  window.addEventListener('aq-tab', () => { if (window.aqTab === 'riepilogo') drawTrend(); });
+</script>
+
+<script>
+  // --- tabelle con ricerca e filtri
+  const pill = (v) => { const s = document.createElement('span'); s.className = 'aq-pill ' + v; s.textContent = v; return s; };
+  const cell = (tr, v, cls) => { const td = tr.insertCell(); if (cls) td.className = cls; if (v instanceof Node) td.append(v); else td.textContent = v ?? ''; return td; };
+
+  const tables = [
+    {
+      src: 'doppioni_clienti', table: 'dc-table', q: 'dc-q', sel: [['dc-liv', 'livello']], n: 'dc-n', unit: 'schede',
+      key: (r) => r.codice, group: (r) => r.gruppo,
+      text: (r) => [r.nome, r.codice, r.citta, r.gruppo].join(' '),
+      row: (tr, r) => { cell(tr, r.gruppo); cell(tr, pill(r.livello)); cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.citta, 'aq-hide-narrow'); cell(tr, String(r.animali)); cell(tr, r.motivi); },
+    },
+    {
+      src: 'doppioni_animali', table: 'da-table', q: 'da-q', sel: [['da-liv', 'livello']], n: 'da-n', unit: 'schede',
+      key: (r) => encodeURIComponent(r.gruppo) + ',' + encodeURIComponent(r.codice), group: (r) => r.gruppo,
+      text: (r) => [r.nome, r.codice, r.proprietario, r.proprietario_codice, r.gruppo].join(' '),
+      row: (tr, r) => { cell(tr, r.gruppo); cell(tr, pill(r.livello)); cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.specie, 'aq-hide-narrow'); cell(tr, r.nascita, 'aq-hide-narrow'); cell(tr, r.proprietario + ' · ' + r.proprietario_codice); cell(tr, r.motivi); },
+    },
+    {
+      src: 'problemi_clienti', table: 'pc-table', q: 'pc-q', sel: [['pc-g', 'gravita'], ['pc-c', 'campo']], fill: 'pc-c', n: 'pc-n', unit: 'segnalazioni',
+      key: (r) => r.id,
+      text: (r) => [r.nome, r.codice].join(' '),
+      row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, pill(r.gravita)); cell(tr, r.campo); cell(tr, r.tipo, 'aq-hide-narrow'); cell(tr, r.dettaglio); },
+    },
+    {
+      src: 'problemi_animali', table: 'pa-table', q: 'pa-q', sel: [['pa-g', 'gravita'], ['pa-c', 'campo']], fill: 'pa-c', n: 'pa-n', unit: 'segnalazioni',
+      key: (r) => r.id,
+      text: (r) => [r.nome, r.codice, r.proprietario, r.proprietario_codice].join(' '),
+      row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.specie, 'aq-hide-narrow'); cell(tr, r.proprietario + ' · ' + r.proprietario_codice, 'aq-hide-narrow'); cell(tr, pill(r.gravita)); cell(tr, r.campo); cell(tr, r.dettaglio); },
+    },
+  ];
+  const sev = { Alta: 0, Media: 1, Bassa: 2 };
+
+  const render = (t) => {
+    const d = dash.data(t.src);
+    const tbody = document.querySelector('#' + t.table + ' tbody');
+    const count = document.getElementById(t.n);
+    if (d.status !== 'ok') {
+      tbody.replaceChildren();
+      count.textContent = d.status === 'error' ? 'Failed to load' : '';
+      return;
+    }
+    if (t.fill) {
+      const s = document.getElementById(t.fill);
+      if (s.options.length === 1) {
+        const campi = [...new Set(d.data.map((r) => r.campo))].sort((a, b) => a.localeCompare(b, 'it'));
+        s.append(...campi.map((c) => new Option(c, c)));
+      }
+    }
+    const q = document.getElementById(t.q).value.trim().toUpperCase();
+    const filters = t.sel.map(([id, f]) => [f, document.getElementById(id).value]).filter(([, v]) => v);
+    let rows = d.data.filter((r) => (!q || t.text(r).toUpperCase().includes(q)) && filters.every(([f, v]) => r[f] === v));
+    if (!t.group) rows = rows.slice().sort((a, b) => (sev[a.gravita] - sev[b.gravita]) || a.campo.localeCompare(b.campo, 'it') || a.nome.localeCompare(b.nome, 'it'));
+    const frag = document.createDocumentFragment();
+    let last = null, alt = false;
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.dataset.key = t.key(r);
+      if (t.group) {
+        if (t.group(r) !== last) { alt = !alt; last = t.group(r); tr.classList.add('aq-first'); }
+        if (alt) tr.classList.add('aq-alt');
+      }
+      t.row(tr, r);
+      frag.append(tr);
+    }
+    tbody.replaceChildren(frag);
+    const groups = t.group ? new Set(rows.map(t.group)).size : null;
+    count.textContent = (groups !== null ? window.aqFmt.fInt(groups) + ' gruppi, ' : '') + window.aqFmt.fInt(rows.length) + ' ' + t.unit;
+  };
+
+  for (const t of tables) {
+    document.getElementById(t.q).addEventListener('input', () => render(t));
+    t.sel.forEach(([id]) => document.getElementById(id).addEventListener('change', () => render(t)));
+  }
+  dash.onData(() => tables.forEach(render));
+</script>
