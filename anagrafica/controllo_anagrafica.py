@@ -934,6 +934,7 @@ def build(input_dir, out_dir):
     }
     json.dump(data, open(hist_path, "w", encoding="utf-8"), ensure_ascii=False)
     export_dashboard(data, os.path.join(out_dir, "dashboard"))
+    write_summary(data, os.path.join(out_dir, f"Riepilogo_{TODAY.isoformat()}.html"))
     return xlsx, hist_path, snapshot, summary
 
 
@@ -947,6 +948,55 @@ def mask(text):
     for rx, label in SENSITIVE:
         text = rx.sub(f"[{label}]", text)
     return text
+
+
+SUMMARY_ROWS = [
+    ("Clienti in anagrafica", "clienti", None),
+    ("Animali in anagrafica", "animali", None),
+    ("Clienti con scheda completa e corretta", "clientiCompleti", "up"),
+    ("Gruppi di clienti doppioni", "gruppiDoppioniClienti", "down"),
+    ("  di cui a confidenza alta", "gruppiDoppioniAlta", "down"),
+    ("Schede cliente in più da unire", "schedeInPiu", "down"),
+    ("Gruppi di animali doppioni", "gruppiDoppioniAnimali", "down"),
+    ("Animali con problemi (gravità alta o media)", "animaliConProblemi", "down"),
+    ("Cani senza microchip", "caniSenzaChip", "down"),
+    ("Clienti dormienti da richiamare", "clientiDormienti", None),
+    ("Clienti attivi senza animale registrato", "clientiAttiviSenzaAnimali", "down"),
+]
+
+
+def write_summary(data, path):
+    """Riepilogo breve (senza dati personali) da salvare su Google Drive a ogni controllo."""
+    from html import escape
+    st = data["storico"]
+    cur, prev = st[-1], (st[-2] if len(st) > 1 else None)
+    it = lambda n: f"{n:,}".replace(",", ".")
+    rows = []
+    for label, k, good in SUMMARY_ROWS:
+        if k not in cur:
+            continue
+        delta = ""
+        if prev and prev.get(k) is not None:
+            d = cur[k] - prev[k]
+            delta = "invariato" if d == 0 else f"{'+' if d > 0 else ''}{it(d)}"
+            if d and good:
+                delta += " (meglio)" if (d > 0) == (good == "up") else " (peggio)"
+        rows.append(f"<tr><td>{escape(label.strip())}</td><td>{it(cur[k])}</td><td>{delta}</td></tr>")
+    prev_txt = (f"La colonna Variazione confronta con il controllo del {fmt_date(prev['data'])}." if prev
+                else "È il primo controllo: le variazioni compariranno dal prossimo.")
+    sys_items = "".join(f"<li><b>{escape(x['titolo'])}</b>: {escape(x['dettaglio'])}</li>" for x in data["sistemici"])
+    html = f"""<html><body>
+<h1>Controllo anagrafica Snoots del {fmt_date(cur['data'])}</h1>
+<p>{prev_txt} Le liste complete con nomi e contatti sono nel file
+Controllo_Anagrafica_{cur['data']}.xlsx; la dashboard è su
+https://claude.ai/artifact/CV8aTA7Xg26R41AgbYBnJc</p>
+<h2>Numeri principali</h2>
+<table border="1" cellpadding="4"><tr><th>Voce</th><th>Valore</th><th>Variazione</th></tr>
+{''.join(rows)}</table>
+<h2>Problemi dovuti all'importazione</h2>
+<ul>{sys_items}</ul>
+</body></html>"""
+    open(path, "w", encoding="utf-8").write(html)
 
 
 def export_dashboard(data, out):

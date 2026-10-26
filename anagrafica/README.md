@@ -22,14 +22,20 @@ doppioni, dati mancanti, dati errati.
    ```
    python3 anagrafica/controllo_anagrafica.py --input <cartella_json> --out anagrafica/output
    ```
-   Produce `Controllo_Anagrafica_<data>.xlsx` e i file per la dashboard in
-   `output/dashboard/` (senza CF, telefoni ed email).
+   Produce `Controllo_Anagrafica_<data>.xlsx`, `Riepilogo_<data>.html` e i file per la
+   dashboard in `output/dashboard/` (senza CF, telefoni ed email).
 4. **Aggiorna la dashboard** "Qualità anagrafica Snoots"
    (https://claude.ai/artifact/CV8aTA7Xg26R41AgbYBnJc): carica ogni file di
    `output/dashboard/` come asset e aggiorna `url`, `name` e `updated` del dataset
    con lo stesso nome.
    Aggiungi anche `dormienti.json` (dataset `dormienti`). Elimina gli asset sostituiti.
-5. Invia l'Excel all'utente e riassumi le variazioni rispetto al controllo precedente.
+5. **Salva il riepilogo su Google Drive**: carica `output/Riepilogo_<data>.html` (generato dallo
+   script, senza dati personali) con `create_file`, `contentMimeType: text/html`, titolo
+   "Riepilogo controllo anagrafica <data>", nella cartella "Controllo anagrafica Snoots"
+   (id `1lL2d-lu026w4VPWQrMLrzJnPVE6GCl45`). Diventa un documento Google. L'Excel non va su
+   Drive: è troppo grande per il connettore e lo salva l'utente.
+6. Invia l'Excel all'utente in chat, ricordandogli di trascinarlo nella stessa cartella di Drive,
+   e riassumi le variazioni rispetto al controllo precedente.
 
 `output/` è in `.gitignore`: contiene dati personali e non va mai committato.
 
