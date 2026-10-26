@@ -234,18 +234,21 @@
   <section class="aq-page" id="richiamare" data-page="richiamare" hidden>
     <div class="aq-card" id="card-dormienti">
       <h2>Clienti dormienti da richiamare</h2>
-      <p class="aq-note">Clienti storici, arrivati dal vecchio programma di fatturazione, senza animali registrati e senza fatture in Snoots. Telefoni ed email sono nel foglio "Clienti dormienti" del file Excel.</p>
+      <p class="aq-note">Clienti che non vengono da più di 12 mesi: clienti storici del vecchio programma di fatturazione senza animali registrati, e clienti con animali vivi senza fatture recenti in Snoots. Le schede doppie contano come una persona sola. Esclusi i clienti con soli animali deceduti. Telefoni ed email sono nel foglio "Clienti dormienti" del file Excel.</p>
       <p class="aq-note">Prima di contattarli per promozioni verifica il consenso marketing: in Snoots risulta "sì" per tutti i clienti importati, ma è un valore predefinito dell'importazione.</p>
       <div class="aq-tools">
         <input id="dr-q" type="search" placeholder="Cerca nome, codice o città" aria-label="Cerca tra i clienti dormienti">
-        <select id="dr-c" aria-label="Contattabile"><option value="">Tutti</option><option>telefono, email</option><option>telefono</option><option>email</option><option>nessun contatto valido</option></select>
+        <select id="dr-m" aria-label="Motivo"><option value="">Tutti i motivi</option><option>Cliente storico senza animali</option><option>Con animali, nessuna fattura in Snoots</option><option>Con animali, ultima fattura oltre 12 mesi fa</option></select>
+        <select id="dr-c" aria-label="Contattabile"><option value="">Tutti i contatti</option><option>telefono, email</option><option>telefono</option><option>email</option><option>nessun contatto valido</option></select>
         <span class="aq-count" id="dr-n"></span>
       </div>
       <div class="aq-scroll">
         <table class="aq-table" id="dr-table" data-source="dormienti" data-row-key="codice">
           <thead><tr>
             <th data-field="codice">Codice</th><th data-field="nome">Cliente</th>
-            <th data-field="citta">Città</th><th data-field="contattabile">Contattabile via</th>
+            <th data-field="motivo">Motivo</th><th data-field="ultima_fattura">Ultima fattura</th>
+            <th data-field="animali" class="aq-hide-narrow">Animali</th>
+            <th data-field="citta" class="aq-hide-narrow">Città</th><th data-field="contattabile">Contattabile via</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -486,10 +489,10 @@
     },
   ];
   tables.push({
-    src: 'dormienti', table: 'dr-table', q: 'dr-q', sel: [['dr-c', 'contattabile']], n: 'dr-n', unit: 'clienti', plain: true,
+    src: 'dormienti', table: 'dr-table', q: 'dr-q', sel: [['dr-m', 'motivo'], ['dr-c', 'contattabile']], n: 'dr-n', unit: 'clienti', plain: true,
     key: (r) => r.codice,
-    text: (r) => [r.nome, r.codice, r.citta].join(' '),
-    row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.citta); cell(tr, r.contattabile); },
+    text: (r) => [r.nome, r.codice, r.citta, r.animali].join(' '),
+    row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.motivo); cell(tr, r.ultima_fattura ? window.aqFmt.fData(r.ultima_fattura) : 'nessuna'); cell(tr, r.animali, 'aq-hide-narrow'); cell(tr, r.citta, 'aq-hide-narrow'); cell(tr, r.contattabile); },
   });
   const sev = { Alta: 0, Media: 1, Bassa: 2 };
 

@@ -13,8 +13,8 @@ doppioni, dati mancanti, dati errati.
 
    I risultati sono troppo grandi per la conversazione e vengono salvati in file
    `mcp-Snoots_MCP-search-customers-*.txt`, `...-search-patients-*.txt`, `...-search-invoices-*.txt`.
-   Copiali in una cartella **fuori dal repository** (scratchpad), solo quelli del
-   mese in corso, e verifica che gli `_id` unici siano pari a `totalDocs`.
+   Copiali in una cartella **fuori dal repository** (scratchpad), solo quelli di questo
+   controllo, e verifica che gli `_id` unici siano pari a `totalDocs`.
 2. **Recupera lo storico**: scarica dalla dashboard il file `storico.json` attuale
    e mettilo come `storico` in `output/dashboard_data.json`, così il nuovo controllo
    si aggiunge ai precedenti invece di ripartire da zero.
@@ -44,6 +44,10 @@ doppioni, dati mancanti, dati errati.
   per aziende ragione sociale e P.IVA.
 - Dati errati: CF (formato, carattere di controllo, coerenza con nome e cognome e con il
   sesso), P.IVA, telefono, email, CAP, provincia, tipo cliente.
+- Clienti dormienti da richiamare (foglio "Clienti dormienti", scheda "Da richiamare"): clienti
+  storici senza animali e senza fatture, e clienti con animali vivi senza fatture da oltre 12 mesi.
+  Le schede doppie contano come una persona; esclusi i clienti con soli animali deceduti e quelli
+  nuovi inseriti in clinica.
 - Clienti senza animali, divisi in:
   - **dormienti da richiamare**: clienti storici (dal vecchio programma di fatturazione, 2023)
     senza animali e senza fatture in Snoots. Non sono un errore: vanno nel foglio

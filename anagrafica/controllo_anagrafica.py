@@ -492,6 +492,47 @@ def find_customer_duplicates(C):
     return group_list, low_pairs, shared_contacts
 
 
+DORMANT_DAYS = 365
+MOTIVI_DORMIENTI = ["Cliente storico senza animali", "Con animali, nessuna fattura in Snoots",
+                    "Con animali, ultima fattura oltre 12 mesi fa"]
+
+
+def find_dormant(C, pets_by_owner, last_inv, no_pets_dormant, dup_groups):
+    """Clienti da richiamare: storici senza animali, o con animali vivi e nessuna fattura da oltre 12 mesi.
+    Esclusi i clienti con soli animali deceduti e quelli nuovi inseriti in clinica senza fatture.
+    Le schede doppie contano come una persona: vale l'ultima fattura e gli animali di tutto il gruppo."""
+    cutoff = (TODAY - dt.timedelta(days=DORMANT_DAYS)).isoformat()
+    group = {m: g["members"] for g in dup_groups for m in g["members"]}
+    out, deceased_only, seen = {}, 0, set()
+    for cid, c in C.items():
+        members = group.get(cid, [cid])
+        if seen & set(members):
+            continue
+        pets = [p for m in members for p in pets_by_owner.get(m, [])]
+        li = max((last_inv.get(m, "") for m in members), default="")
+        if pets and cid in no_pets_dormant:
+            continue  # gli animali sono sulla sua scheda doppia: la valuta il ramo sotto
+        if cid in no_pets_dormant and li:
+            continue  # fatture sulla scheda doppia: è attivo
+        seen.update(members)
+        if cid in no_pets_dormant:
+            motivo = MOTIVI_DORMIENTI[0]
+        elif not pets or (li and li >= cutoff):
+            continue
+        elif not li and (c.get("createdBy") or {}).get("name") != IMPORTER:
+            continue
+        elif all(p.get("deceased") for p in pets):
+            deceased_only += 1
+            continue
+        else:
+            motivo = MOTIVI_DORMIENTI[2] if li else MOTIVI_DORMIENTI[1]
+        alive = [p.get("name") or "?" for p in pets if not p.get("deceased")]
+        out[cid] = {"motivo": motivo, "ultima": li, "animali": ", ".join(alive)}
+    order = {m: i for i, m in enumerate(MOTIVI_DORMIENTI)}
+    return dict(sorted(out.items(), key=lambda kv: (order[kv[1]["motivo"]], kv[1]["ultima"], cust_label(C[kv[0]])))), \
+        deceased_only
+
+
 # ---------------------------------------------------------------- controlli animali
 
 GENERIC_PET = {"CANE", "GATTO", "GATTA", "GATTINO", "GATTINA", "CUCCIOLO", "CUCCIOLA", "CONIGLIO",
@@ -648,13 +689,14 @@ def build(input_dir, out_dir):
     I = load(input_dir, "invoices")
     last_inv, inv_since = last_invoice_by_customer(I)
     cust_issues, pets_by_owner = check_customers(C, P, last_inv, inv_since)
-    dormant = sorted({i[0]["_id"] for i in cust_issues if i[1] == "Cliente dormiente"}, key=lambda x: cust_label(C[x]))
+    no_pets_dormant = {i[0]["_id"] for i in cust_issues if i[1] == "Cliente dormiente"}
     active_no_pets = {i[0]["_id"] for i in cust_issues if i[3] == "Animali" and i[1] == "Dato mancante"}
     dup_groups, low_pairs, shared = find_customer_duplicates(C)
     cust_group_of = {}
     for gi, g in enumerate(dup_groups, 1):
         for m in g["members"]:
             cust_group_of[m] = f"C{gi}"
+    dormant, deceased_only = find_dormant(C, pets_by_owner, last_inv, no_pets_dormant, dup_groups)
     pet_issues = check_patients(P, C)
     pet_dups = find_patient_duplicates(P, cust_group_of)
 
@@ -679,8 +721,11 @@ def build(input_dir, out_dir):
         ("Clienti con almeno un dato mancante o errato", len(n_cust_with_issue)),
         ("Clienti completi e corretti", len(C) - len(n_cust_with_issue)),
         ("Clienti senza animali", sum(1 for c in C if not pets_by_owner.get(c))),
-        ("  di cui dormienti da richiamare (nessuna fattura)", len(dormant)),
+        ("  di cui dormienti da richiamare (nessuna fattura)", len(no_pets_dormant)),
         ("  di cui attivi o nuovi senza animale registrato", len(active_no_pets)),
+        ("Clienti dormienti da richiamare (totale)", len(dormant)),
+        *[(f"  {m.lower()}", n) for m, n in collections.Counter(d["motivo"] for d in dormant.values()).most_common()],
+        ("  esclusi: clienti con soli animali deceduti", deceased_only),
         ("Gruppi di animali doppioni", len(pet_dups)),
         ("Animali con problemi (gravità alta/media)", len(n_pet_with_issue)),
     ]
@@ -755,11 +800,15 @@ def build(input_dir, out_dir):
         ways = (["telefono"] if ph and phone_valid(ph) else []) + (["email"] if c.get("email") and not email_problem(c["email"]) else [])
         return ", ".join(ways) or "nessun contatto valido"
 
-    rows = [[C[cid]["number"], cust_label(C[cid]), C[cid].get("phone") or "", C[cid].get("email") or "",
-             addr(C[cid])[1], contact(C[cid]), "Sì" if C[cid].get("optIn") else "No"] for cid in dormant]
-    write_sheet(wb, "Clienti dormienti", ["Codice cliente", "Cliente", "Telefono", "Email", "Città", "Contattabile via",
-                                          "Consenso marketing (da verificare)"], rows,
-                {"Cliente": 30, "Email": 30, "Contattabile via": 22, "Consenso marketing (da verificare)": 20})
+    rows = [[C[cid]["number"], cust_label(C[cid]), d["motivo"], fmt_date(d["ultima"]) if d["ultima"] else "",
+             d["animali"], C[cid].get("phone") or "", C[cid].get("email") or "", addr(C[cid])[1], contact(C[cid]),
+             "Sì" if C[cid].get("optIn") else "No", cust_group_of.get(cid, "")]
+            for cid, d in dormant.items()]
+    write_sheet(wb, "Clienti dormienti", ["Codice cliente", "Cliente", "Motivo", "Ultima fattura", "Animali vivi",
+                                          "Telefono", "Email", "Città", "Contattabile via",
+                                          "Consenso marketing (da verificare)", "Gruppo doppione"], rows,
+                {"Cliente": 30, "Motivo": 38, "Animali vivi": 30, "Email": 30, "Contattabile via": 22,
+                 "Consenso marketing (da verificare)": 20})
 
     # --- animali
     def pet_row(p):
@@ -847,6 +896,7 @@ def build(input_dir, out_dir):
         "gruppiDoppioniAnimali": len(pet_dups),
         "clientiSenzaAnimali": sum(1 for c in C if not pets_by_owner.get(c)),
         "clientiDormienti": len(dormant),
+        "dormientiSenzaAnimali": len(no_pets_dormant),
         "clientiAttiviSenzaAnimali": len(active_no_pets),
         "animaliConProblemi": len(n_pet_with_issue),
         "caniSenzaChip": sum(1 for i in pet_issues if i[3] == "Microchip" and i[1] == "Dato mancante"),
@@ -876,7 +926,8 @@ def build(input_dir, out_dir):
                             for gi, g in enumerate(pet_dups, 1)],
         "problemiClienti": [ci(i) for i in cust_issues if i[1] != "Cliente dormiente"],
         "dormienti": [{"n": C[c]["number"], "nome": cust_label(C[c]), "citta": addr(C[c])[1],
-                       "contatto": contact(C[c])} for c in dormant],
+                       "contatto": contact(C[c]), "motivo": d["motivo"], "ultima": d["ultima"][:10],
+                       "animali": d["animali"]} for c, d in dormant.items()],
         "problemiAnimali": [pi(i) for i in pet_issues],
         "contattiCondivisi": len(low_pairs),
         "sistemici": [{"titolo": t, "dettaglio": d} for t, d in sistemici],
@@ -905,7 +956,8 @@ def export_dashboard(data, out):
         "storico": data["storico"],
         "per_campo": data["perCampo"],
         "sistemici": data["sistemici"],
-        "dormienti": [{"codice": d["n"], "nome": d["nome"], "citta": d["citta"], "contattabile": d["contatto"]}
+        "dormienti": [{"codice": d["n"], "nome": d["nome"], "citta": d["citta"], "contattabile": d["contatto"],
+                       "motivo": d["motivo"], "ultima_fattura": d["ultima"], "animali": d["animali"]}
                       for d in data["dormienti"]],
         "doppioni_clienti": [
             {"gruppo": g["gruppo"], "livello": g["livello"], "motivi": mask("; ".join(g["motivi"])),
