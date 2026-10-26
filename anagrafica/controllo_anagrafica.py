@@ -201,11 +201,30 @@ class UF:
 
 
 LEVEL_ORDER = {"Alta": 0, "Media": 1, "Bassa": 2}
+IMPORTER = "API IMPORTER"
+
+
+def fmt_date(iso):
+    return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
+
+
+def last_invoice_by_customer(I):
+    """Data dell'ultima fattura emessa per cliente e data della fattura più vecchia presente."""
+    last, first = {}, None
+    for inv in I.values():
+        cid, d = (inv.get("customer") or {}).get("id"), inv.get("emittedAt") or ""
+        if not cid or not d:
+            continue
+        if d > last.get(cid, ""):
+            last[cid] = d
+        if first is None or d < first:
+            first = d
+    return last, first
 
 # ---------------------------------------------------------------- controlli clienti
 
 
-def check_customers(C, P):
+def check_customers(C, P, last_inv, inv_since):
     issues = []  # (cliente, categoria, gravità, campo, dettaglio)
 
     def add(c, cat, grav, campo, det=""):
@@ -303,7 +322,15 @@ def check_customers(C, P):
             add(c, "Dato errato", "Bassa", "Provincia", f"{prov}: sigla non valida")
 
         if not pets_by_owner.get(c["_id"]):
-            add(c, "Senza animali", "Bassa", "Animali", "nessun animale associato")
+            if c["_id"] in last_inv:
+                add(c, "Dato mancante", "Media", "Animali",
+                    f"cliente attivo (ultima fattura {fmt_date(last_inv[c['_id']])}) senza animali registrati")
+            elif (c.get("createdBy") or {}).get("name") != IMPORTER:
+                add(c, "Dato mancante", "Media", "Animali", "cliente inserito in clinica senza animali registrati")
+            else:
+                since = f" dal {fmt_date(inv_since)}" if inv_since else ""
+                add(c, "Cliente dormiente", "Bassa", "Animali",
+                    f"cliente storico senza animali registrati e senza fatture{since}: da richiamare")
     return issues, pets_by_owner
 
 
@@ -618,7 +645,11 @@ CUST_HEAD = ["Codice cliente", "Cliente", "Tipo", "Codice fiscale", "Partita IVA
 def build(input_dir, out_dir):
     C = load(input_dir, "customers")
     P = load(input_dir, "patients")
-    cust_issues, pets_by_owner = check_customers(C, P)
+    I = load(input_dir, "invoices")
+    last_inv, inv_since = last_invoice_by_customer(I)
+    cust_issues, pets_by_owner = check_customers(C, P, last_inv, inv_since)
+    dormant = sorted({i[0]["_id"] for i in cust_issues if i[1] == "Cliente dormiente"}, key=lambda x: cust_label(C[x]))
+    active_no_pets = {i[0]["_id"] for i in cust_issues if i[3] == "Animali" and i[1] == "Dato mancante"}
     dup_groups, low_pairs, shared = find_customer_duplicates(C)
     cust_group_of = {}
     for gi, g in enumerate(dup_groups, 1):
@@ -648,6 +679,8 @@ def build(input_dir, out_dir):
         ("Clienti con almeno un dato mancante o errato", len(n_cust_with_issue)),
         ("Clienti completi e corretti", len(C) - len(n_cust_with_issue)),
         ("Clienti senza animali", sum(1 for c in C if not pets_by_owner.get(c))),
+        ("  di cui dormienti da richiamare (nessuna fattura)", len(dormant)),
+        ("  di cui attivi o nuovi senza animale registrato", len(active_no_pets)),
         ("Gruppi di animali doppioni", len(pet_dups)),
         ("Animali con problemi (gravità alta/media)", len(n_pet_with_issue)),
     ]
@@ -660,7 +693,7 @@ def build(input_dir, out_dir):
     for h, col in (("Entità", 1), ("Tipo problema", 2), ("Campo", 3), ("N. record", 4)):
         c = ws.cell(row=r, column=col, value=h)
         c.fill, c.font = HEAD_FILL, HEAD_FONT
-    by_field = collections.Counter(("Cliente", i[1], i[3]) for i in cust_issues)
+    by_field = collections.Counter(("Cliente", i[1], i[3]) for i in cust_issues if i[1] != "Cliente dormiente")
     by_field.update(("Animale", i[1], i[3]) for i in pet_issues)
     for (ent, cat, campo), n in sorted(by_field.items(), key=lambda x: (x[0][0], -x[1])):
         r += 1
@@ -706,7 +739,7 @@ def build(input_dir, out_dir):
     # vista per cliente: una riga per cliente con l'elenco dei problemi
     per_c = collections.defaultdict(list)
     for i in cust_issues:
-        if i[1] != "Senza animali":
+        if i[1] != "Cliente dormiente":
             per_c[i[0]["_id"]].append(f"{i[3]}{' (' + i[1].lower() + ')' if i[1] != 'Dato mancante' else ''}")
     rows = []
     for cid, probs in sorted(per_c.items(), key=lambda x: -len(x[1])):
@@ -717,10 +750,16 @@ def build(input_dir, out_dir):
                                              "N. animali", "Gruppo doppione"], rows,
                 {"Cliente": 32, "Cosa sistemare": 80})
 
-    rows = [cust_row(C[cid]) + [(C[cid].get("createdAt") or "")[:10]]
-            for cid in sorted(C, key=lambda x: cust_label(C[x])) if not pets_by_owner.get(cid)]
-    write_sheet(wb, "Clienti senza animali", CUST_HEAD + ["Creato il"], rows,
-                {"Cliente": 30, "Email": 30, "Indirizzo": 30})
+    def contact(c):
+        ph = norm_phone(c.get("phone"))
+        ways = (["telefono"] if ph and phone_valid(ph) else []) + (["email"] if c.get("email") and not email_problem(c["email"]) else [])
+        return ", ".join(ways) or "nessun contatto valido"
+
+    rows = [[C[cid]["number"], cust_label(C[cid]), C[cid].get("phone") or "", C[cid].get("email") or "",
+             addr(C[cid])[1], contact(C[cid]), "Sì" if C[cid].get("optIn") else "No"] for cid in dormant]
+    write_sheet(wb, "Clienti dormienti", ["Codice cliente", "Cliente", "Telefono", "Email", "Città", "Contattabile via",
+                                          "Consenso marketing (da verificare)"], rows,
+                {"Cliente": 30, "Email": 30, "Contattabile via": 22, "Consenso marketing (da verificare)": 20})
 
     # --- animali
     def pet_row(p):
@@ -763,6 +802,13 @@ def build(input_dir, out_dir):
         sistemici.append(("Indirizzi con virgola finale",
                           f"{comma} indirizzi terminano con ',' (residuo dell'importazione): da ripulire, "
                           "compare su lettere e fatture."))
+    imp_c = [c for c in C.values() if (c.get("createdBy") or {}).get("name") == IMPORTER]
+    opt = sum(1 for c in imp_c if c.get("optIn"))
+    if imp_c and opt == len(imp_c):
+        sistemici.append(("Consenso marketing da verificare",
+                          f"Tutti i {len(imp_c)} clienti importati risultano con consenso marketing: è il valore "
+                          "predefinito dell'importazione, non un consenso raccolto. Va verificato prima di usare "
+                          "la lista per promozioni o richiami commerciali."))
     ster_f = sum(1 for p in imported if p.get("sterilized") is False)
     if imported and ster_f > 0.9 * len(imported):
         sistemici.append(("Sterilizzazione da verificare",
@@ -800,6 +846,8 @@ def build(input_dir, out_dir):
         "schedeInPiu": dup_cust_records - len(dup_groups),
         "gruppiDoppioniAnimali": len(pet_dups),
         "clientiSenzaAnimali": sum(1 for c in C if not pets_by_owner.get(c)),
+        "clientiDormienti": len(dormant),
+        "clientiAttiviSenzaAnimali": len(active_no_pets),
         "animaliConProblemi": len(n_pet_with_issue),
         "caniSenzaChip": sum(1 for i in pet_issues if i[3] == "Microchip" and i[1] == "Dato mancante"),
         "razzaSoloNote": breed_notes,
@@ -826,7 +874,9 @@ def build(input_dir, out_dir):
                                                   "deceduto", "own", "ownNome"], pet_row(P[m])))
                                         for m in g["members"]]}
                             for gi, g in enumerate(pet_dups, 1)],
-        "problemiClienti": [ci(i) for i in cust_issues if i[1] != "Senza animali"],
+        "problemiClienti": [ci(i) for i in cust_issues if i[1] != "Cliente dormiente"],
+        "dormienti": [{"n": C[c]["number"], "nome": cust_label(C[c]), "citta": addr(C[c])[1],
+                       "contatto": contact(C[c])} for c in dormant],
         "problemiAnimali": [pi(i) for i in pet_issues],
         "contattiCondivisi": len(low_pairs),
         "sistemici": [{"titolo": t, "dettaglio": d} for t, d in sistemici],
@@ -855,6 +905,8 @@ def export_dashboard(data, out):
         "storico": data["storico"],
         "per_campo": data["perCampo"],
         "sistemici": data["sistemici"],
+        "dormienti": [{"codice": d["n"], "nome": d["nome"], "citta": d["citta"], "contattabile": d["contatto"]}
+                      for d in data["dormienti"]],
         "doppioni_clienti": [
             {"gruppo": g["gruppo"], "livello": g["livello"], "motivi": mask("; ".join(g["motivi"])),
              "codice": m["n"], "nome": m["nome"], "citta": m["citta"], "animali": m["animali"],

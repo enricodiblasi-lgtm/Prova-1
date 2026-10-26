@@ -65,6 +65,7 @@
     <button class="aq-tab" role="tab" id="tab-doppioni" data-tab="doppioni" aria-selected="false">Doppioni</button>
     <button class="aq-tab" role="tab" id="tab-clienti" data-tab="clienti" aria-selected="false">Clienti da sistemare</button>
     <button class="aq-tab" role="tab" id="tab-animali" data-tab="animali" aria-selected="false">Animali da sistemare</button>
+    <button class="aq-tab" role="tab" id="tab-richiamare" data-tab="richiamare" aria-selected="false">Da richiamare</button>
   </nav>
 
   <!-- RIEPILOGO -->
@@ -95,10 +96,10 @@
         <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="caniSenzaChip" data-row="0">—</span>
         <span class="aq-tile-delta" data-k="caniSenzaChip" data-good="down"></span>
       </div>
-      <div class="aq-tile" id="kpi-senza-animali">
-        <span class="aq-tile-label">Clienti senza animali</span>
-        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="clientiSenzaAnimali" data-row="0">—</span>
-        <span class="aq-tile-delta" data-k="clientiSenzaAnimali" data-good="down"></span>
+      <div class="aq-tile" id="kpi-dormienti">
+        <span class="aq-tile-label">Clienti dormienti da richiamare</span>
+        <span class="aq-tile-value dash-skeleton" data-source="ultimo" data-field="clientiDormienti" data-row="0">—</span>
+        <span class="aq-tile-delta" data-k="clientiDormienti" data-good="down"></span>
       </div>
     </div>
 
@@ -228,6 +229,29 @@
       </div>
     </div>
   </section>
+
+  <!-- DA RICHIAMARE -->
+  <section class="aq-page" id="richiamare" data-page="richiamare" hidden>
+    <div class="aq-card" id="card-dormienti">
+      <h2>Clienti dormienti da richiamare</h2>
+      <p class="aq-note">Clienti storici, arrivati dal vecchio programma di fatturazione, senza animali registrati e senza fatture in Snoots. Telefoni ed email sono nel foglio "Clienti dormienti" del file Excel.</p>
+      <p class="aq-note">Prima di contattarli per promozioni verifica il consenso marketing: in Snoots risulta "sì" per tutti i clienti importati, ma è un valore predefinito dell'importazione.</p>
+      <div class="aq-tools">
+        <input id="dr-q" type="search" placeholder="Cerca nome, codice o città" aria-label="Cerca tra i clienti dormienti">
+        <select id="dr-c" aria-label="Contattabile"><option value="">Tutti</option><option>telefono, email</option><option>telefono</option><option>email</option><option>nessun contatto valido</option></select>
+        <span class="aq-count" id="dr-n"></span>
+      </div>
+      <div class="aq-scroll">
+        <table class="aq-table" id="dr-table" data-source="dormienti" data-row-key="codice">
+          <thead><tr>
+            <th data-field="codice">Codice</th><th data-field="nome">Cliente</th>
+            <th data-field="citta">Città</th><th data-field="contattabile">Contattabile via</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -241,11 +265,11 @@
       const p = s.length > 1 ? s[s.length - 2] : null;
       const q = (r) => r.clientiCompleti / r.clienti;
       const keys = ['clienti', 'animali', 'clientiCompleti', 'gruppiDoppioniClienti', 'gruppiDoppioniAlta', 'schedeInPiu',
-        'gruppiDoppioniAnimali', 'clientiSenzaAnimali', 'animaliConProblemi', 'caniSenzaChip'];
+        'gruppiDoppioniAnimali', 'clientiSenzaAnimali', 'clientiDormienti', 'clientiAttiviSenzaAnimali', 'animaliConProblemi', 'caniSenzaChip'];
       const row = { data: u.data, quotaCompleti: q(u), d_quotaCompleti: p ? q(u) - q(p) : null };
       for (const k of keys) {
         row[k] = u[k];
-        row['d_' + k] = p ? u[k] - p[k] : null;
+        row['d_' + k] = p && p[k] != null ? u[k] - p[k] : null;
       }
       return [row];
     },
@@ -461,6 +485,12 @@
       row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.specie, 'aq-hide-narrow'); cell(tr, r.proprietario + ' · ' + r.proprietario_codice, 'aq-hide-narrow'); cell(tr, pill(r.gravita)); cell(tr, r.campo); cell(tr, r.dettaglio); },
     },
   ];
+  tables.push({
+    src: 'dormienti', table: 'dr-table', q: 'dr-q', sel: [['dr-c', 'contattabile']], n: 'dr-n', unit: 'clienti', plain: true,
+    key: (r) => r.codice,
+    text: (r) => [r.nome, r.codice, r.citta].join(' '),
+    row: (tr, r) => { cell(tr, r.codice, 'aq-code'); cell(tr, r.nome); cell(tr, r.citta); cell(tr, r.contattabile); },
+  });
   const sev = { Alta: 0, Media: 1, Bassa: 2 };
 
   const render = (t) => {
@@ -482,7 +512,7 @@
     const q = document.getElementById(t.q).value.trim().toUpperCase();
     const filters = t.sel.map(([id, f]) => [f, document.getElementById(id).value]).filter(([, v]) => v);
     let rows = d.data.filter((r) => (!q || t.text(r).toUpperCase().includes(q)) && filters.every(([f, v]) => r[f] === v));
-    if (!t.group) rows = rows.slice().sort((a, b) => (sev[a.gravita] - sev[b.gravita]) || a.campo.localeCompare(b.campo, 'it') || a.nome.localeCompare(b.nome, 'it'));
+    if (!t.group && !t.plain) rows = rows.slice().sort((a, b) => (sev[a.gravita] - sev[b.gravita]) || a.campo.localeCompare(b.campo, 'it') || a.nome.localeCompare(b.nome, 'it'));
     const frag = document.createDocumentFragment();
     let last = null, alt = false;
     for (const r of rows) {
