@@ -456,7 +456,7 @@ def find_customer_duplicates(C):
     uf = UF()
     members_of = collections.defaultdict(set)
     ambiguous = collections.defaultdict(set)
-    for (a, b), v in sorted(pairs.items(), key=lambda kv: LEVEL_ORDER[kv[1]["level"]]):
+    for (a, b), v in sorted(pairs.items(), key=lambda kv: (LEVEL_ORDER[kv[1]["level"]], kv[0])):
         if v["level"] == "Bassa":
             continue
         ra, rb = uf.find(a), uf.find(b)
@@ -504,7 +504,10 @@ def find_dormant(C, pets_by_owner, last_inv, no_pets_dormant, dup_groups):
     cutoff = (TODAY - dt.timedelta(days=DORMANT_DAYS)).isoformat()
     group = {m: g["members"] for g in dup_groups for m in g["members"]}
     out, deceased_only, seen = {}, 0, set()
-    for cid, c in C.items():
+    # ordine fisso: in un gruppo di doppioni si mostra sempre la scheda più completa
+    rank = lambda x: (not pets_by_owner.get(x), not C[x].get("ssn"), not C[x].get("phone"), C[x]["number"])
+    for cid in sorted(C, key=rank):
+        c = C[cid]
         members = group.get(cid, [cid])
         if seen & set(members):
             continue
@@ -1038,7 +1041,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--data", help="data del controllo (AAAA-MM-GG), per ricalcolare un controllo passato")
     a = ap.parse_args()
+    if a.data:
+        TODAY = dt.date.fromisoformat(a.data)
     xlsx, js, snap, summary = build(a.input, a.out)
     for k, v in summary:
         print(f"{k}: {v}")

@@ -34,7 +34,10 @@ doppioni, dati mancanti, dati errati.
    "Riepilogo controllo anagrafica <data>", nella cartella "Controllo anagrafica Snoots"
    (id `1lL2d-lu026w4VPWQrMLrzJnPVE6GCl45`). Diventa un documento Google. L'Excel non va su
    Drive: è troppo grande per il connettore e lo salva l'utente.
-6. Invia l'Excel all'utente in chat, ricordandogli di trascinarlo nella stessa cartella di Drive,
+6. Copia `output/dashboard_data.json` in `output/controlli/<data>.json`: il prossimo controllo lo
+   confronta con questo per dire chi è entrato o uscito da doppioni e dormienti. Per ricalcolare
+   un controllo passato: `--data AAAA-MM-GG`.
+7. Invia l'Excel all'utente in chat, ricordandogli di trascinarlo nella stessa cartella di Drive,
    e riassumi le variazioni rispetto al controllo precedente.
 
 `output/` è in `.gitignore`: contiene dati personali e non va mai committato.
